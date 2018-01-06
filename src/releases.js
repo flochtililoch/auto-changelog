@@ -4,20 +4,32 @@ import { niceDate } from './utils'
 
 const MERGE_COMMIT_PATTERN = /^Merge (remote-tracking )?branch '.+'/
 
+export function validateVersion (version, prefix = '') {
+  const matches = version && version.match(new RegExp(prefix + '(.*)'))
+  if (matches && matches[1] && semver.valid(matches[1])) {
+    return matches[1]
+  }
+  return null
+}
+
 export function parseReleases (commits, origin, latestVersion, options) {
   let release = newRelease(latestVersion)
   const releases = []
   for (let commit of commits) {
-    if (commit.tag && semver.valid(commit.tag)) {
-      if (release.tag || options.unreleased) {
-        releases.push({
-          ...release,
-          href: getCompareLink(commit.tag, release.tag || 'HEAD', origin),
-          commits: release.commits.sort(sortCommits),
-          major: commit.tag && release.tag && semver.diff(commit.tag, release.tag) === 'major'
-        })
+    if (commit.tag) {
+      const commitVersion = validateVersion(commit.tag, options.releasePrefix);
+      if (commitVersion) {
+        if (release.tag || options.unreleased) {
+          const releaseVersion = validateVersion(release.tag, options.releasePrefix);
+          releases.push({
+            ...release,
+            href: getCompareLink(commit.tag, release.tag || 'HEAD', origin),
+            commits: release.commits.sort(sortCommits),
+            major: commit.tag && release.tag && semver.diff(commitVersion, releaseVersion) === 'major'
+          })
+        }
+        release = newRelease(commit.tag, commit.date)
       }
-      release = newRelease(commit.tag, commit.date)
     }
     if (commit.merge) {
       release.merges.push(commit.merge)
@@ -26,7 +38,7 @@ export function parseReleases (commits, origin, latestVersion, options) {
         fixes: commit.fixes,
         commit
       })
-    } else if (filterCommit(commit, release, options.commitLimit)) {
+    } else if (filterCommit(commit, release, options.commitLimit, options.releasePrefix)) {
       release.commits.push(commit)
     }
   }
@@ -48,8 +60,8 @@ function newRelease (tag = null, date = new Date().toISOString()) {
   return release
 }
 
-function filterCommit (commit, release, limit) {
-  if (semver.valid(commit.subject)) {
+function filterCommit (commit, release, limit, releasePrefix) {
+  if (validateVersion(commit.subject, releasePrefix)) {
     // Filter out version commits
     return false
   }

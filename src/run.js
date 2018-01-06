@@ -5,7 +5,7 @@ import semver from 'semver'
 import { version } from '../package.json'
 import { fetchOrigin } from './origin'
 import { fetchCommits } from './commits'
-import { parseReleases } from './releases'
+import { parseReleases, validateVersion } from './releases'
 import { compileTemplate } from './template'
 import { parseLimit } from './utils'
 
@@ -31,6 +31,7 @@ function getOptions (argv, pkg) {
     .option('-i, --issue-url [url]', `override url for issues, use {id} for issue id`)
     .option('--issue-pattern [regex]', `override regex pattern for issues in commit messages`)
     .option('--starting-commit [hash]', `starting commit to use for changelog generation`)
+    .option('--release-prefix [releasePrefix]', 'prefix string used in version tags, ex: my-package/')
     .version(version)
     .parse(argv)
 
@@ -52,10 +53,11 @@ function getOptions (argv, pkg) {
 
 function getLatestVersion (options, pkg) {
   if (options.latestVersion) {
-    if (!semver.valid(options.latestVersion)) {
+    const version = validateVersion(options.latestVersion, options.releasePrefix)
+    if (!version) {
       throw new Error('--latest-version must be a valid semver version')
     }
-    return options.latestVersion
+    return version
   }
   if (options.package) {
     return NPM_VERSION_TAG_PREFIX + pkg.version
